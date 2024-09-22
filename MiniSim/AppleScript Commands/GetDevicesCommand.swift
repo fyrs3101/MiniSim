@@ -11,20 +11,17 @@ import Foundation
 class GetDevicesCommand: NSScriptCommand {
     override func performDefaultImplementation() -> Any? {
         guard
-            let argument = self.property(forKey: "platform") as? String,
-            let platform = Platform(rawValue: argument)
+            let platformArg = self.property(forKey: "platform") as? String,
+            let platform = Platform(rawValue: platformArg),
+            let deviceTypeArg = self.property(forKey: "deviceType") as? String,
+            let deviceType = DeviceType(rawValue: deviceTypeArg)
         else {
             scriptErrorNumber = NSRequiredArgumentsMissingScriptError
             return nil
         }
 
         do {
-            switch platform {
-            case .android:
-                return try self.encode(DeviceService.getAndroidDevices())
-            case .ios:
-                return try self.encode(DeviceService.getIOSDevices())
-            }
+            return try self.encode(DeviceServiceFactory.getDeviceDiscoveryService(platform: platform).getDevices(type: deviceType))
         } catch {
             scriptErrorNumber = NSInternalScriptError
             return nil

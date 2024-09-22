@@ -11,6 +11,7 @@ import UserNotifications
 
 class Menu: NSMenu {
     public let maxKeyEquivalent = 9
+    let actionExecutor = ActionExecutor()
 
     var devices: [Device] = [] {
         didSet {
@@ -35,12 +36,15 @@ class Menu: NSMenu {
 
     func populateDefaultMenu() {
         var sections: [DeviceListSection] = []
+
+        sections.append(.iOSPhysical)
         if UserDefaults.standard.enableiOSSimulators {
-            sections.append(.iOS)
+            sections.append(.iOSVirtual)
         }
 
+        sections.append(.androidPhysical)
         if UserDefaults.standard.enableAndroidEmulators {
-            sections.append(.android)
+            sections.append(.androidVirtual)
         }
 
         if sections.isEmpty {
@@ -68,7 +72,7 @@ class Menu: NSMenu {
 
     func updateDevicesList() {
         let userDefaults = UserDefaults.standard
-        DeviceService.getAllDevices(
+        DeviceServiceFactory.getAllDevices(
             android: userDefaults.enableAndroidEmulators && userDefaults.androidHome != nil,
             iOS: userDefaults.enableiOSSimulators
         ) { devices, error in
@@ -90,30 +94,28 @@ class Menu: NSMenu {
             .forEach(safeRemoveItem)
     }
 
-    @objc private func androidSubMenuClick(_ sender: NSMenuItem) {
-        guard let tag = SubMenuItems.Tags(rawValue: sender.tag) else { return }
-        guard let device = getDeviceByName(name: sender.parent?.title ?? "") else { return }
+    @objc private func subMenuClick(_ sender: NSMenuItem) {
+      guard let tag = SubMenuItems.Tags(rawValue: sender.tag) else { return }
+      guard let device = getDeviceByName(name: sender.parent?.title ?? "") else { return }
 
-        DeviceService.handleAndroidAction(device: device, commandTag: tag, itemName: sender.title)
-    }
-
-    @objc private func IOSSubMenuClick(_ sender: NSMenuItem) {
-        guard let tag = SubMenuItems.Tags(rawValue: sender.tag) else { return }
-        guard let device = getDeviceByName(name: sender.parent?.title ?? "") else { return }
-
-        DeviceService.handleiOSAction(device: device, commandTag: tag, itemName: sender.title)
+      actionExecutor.execute(
+        device: device,
+        commandTag: tag,
+        itemName: sender.title
+      )
     }
 
     @objc private func deviceItemClick(_ sender: NSMenuItem) {
-        guard let device = getDeviceByName(name: sender.title) else { return }
+        guard let device = getDeviceByName(name: sender.title), device.type == .virtual else { return }
 
-        if device.booted {
-            DeviceService.focusDevice(device)
-            return
-        }
-
-        DeviceService.launch(device: device) { error in
-            if let error {
+        DispatchQueue.global().async {
+            if device.booted {
+                device.focus()
+                return
+            }
+            do {
+                try device.launch()
+            } catch {
                 NSAlert.showError(message: error.localizedDescription)
             }
         }
@@ -170,17 +172,30 @@ class Menu: NSMenu {
         var sections: [DeviceListSection] = []
 
         if UserDefaults.standard.enableAndroidEmulators {
-            sections.append(.android)
+            sections.append(.androidVirtual)
         }
+        sections.append(.androidPhysical)
+
         if UserDefaults.standard.enableiOSSimulators {
-            sections.append(.iOS)
+            sections.append(.iOSVirtual)
         }
+        sections.append(.iOSPhysical)
         return sections
     }
 
     private func filter(devices: [Device], for section: DeviceListSection) -> [Device] {
-        let platform: Platform = section == .iOS ? .ios : .android
-        return devices.filter { $0.platform == platform }
+      devices.filter { device in
+        switch section {
+        case .iOSPhysical:
+          return device.platform == .ios && device.type == .physical
+        case .iOSVirtual:
+          return device.platform == .ios && device.type == .virtual
+        case .androidPhysical:
+          return device.platform == .android && device.type == .physical
+        case .androidVirtual:
+          return device.platform == .android && device.type == .virtual
+        }
+      }
     }
 
     private func updateSection(with items: [NSMenuItem], section: DeviceListSection) {
@@ -188,6 +203,10 @@ class Menu: NSMenu {
               let startIndex = self.items.firstIndex(of: header) else {
             return
         }
+
+        let isEmpty = items.isEmpty
+        self.items[startIndex].isHidden = isEmpty
+        guard !isEmpty else { return }
 
         for menuItem in items.reversed() {
             if let itemIndex = self.items.firstIndex(where: { $0.title == menuItem.title }) {
@@ -221,9 +240,10 @@ class Menu: NSMenu {
     func buildSubMenu(for device: Device) -> NSMenu {
         let subMenu = NSMenu()
         let platform = device.platform
-        let callback = platform == .android ? #selector(androidSubMenuClick) : #selector(IOSSubMenuClick)
+        let deviceType = device.type
+        let callback = #selector(subMenuClick)
         let actionsSubMenu = createActionsSubMenu(
-            for: platform.subMenuItems,
+            for: SubMenuItems.items(platform: platform, deviceType: deviceType),
             isDeviceBooted: device.booted,
             callback: callback
         )
@@ -263,7 +283,7 @@ class Menu: NSMenu {
     }
 
     func createCustomCommandsMenu(for platform: Platform, isDeviceBooted: Bool, callback: Selector) -> [NSMenuItem] {
-        DeviceService.getCustomCommands(platform: platform)
+        CustomCommandService.getCustomCommands(platform: platform)
             .filter {  item in
                 if item.needBootedDevice && !isDeviceBooted {
                     return false
@@ -304,16 +324,5 @@ extension Menu: NSMenuDelegate {
     func menuDidClose(_ menu: NSMenu) {
         NotificationCenter.default.post(name: .menuDidClose, object: nil)
         KeyboardShortcuts.enable(.toggleMiniSim)
-    }
-}
-
-extension Platform {
-    var subMenuItems: [SubMenuItem] {
-        switch self {
-        case .android:
-            return SubMenuItems.android
-        case .ios:
-            return SubMenuItems.ios
-        }
     }
 }

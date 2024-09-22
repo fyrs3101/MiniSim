@@ -23,8 +23,6 @@ class MiniSim: NSObject {
     override init() {
         super.init()
 
-        settingsController.window?.delegate = self
-
         setDefaultValues()
         initObservers()
 
@@ -159,6 +157,7 @@ class MiniSim: NSObject {
         if let tag = MainMenuActions(rawValue: sender.tag) {
             switch tag {
             case .preferences:
+                settingsController.window?.delegate = self
                 settingsController.show()
                 settingsController.window?.orderFrontRegardless()
             case .quit:
@@ -172,7 +171,7 @@ class MiniSim: NSObject {
                     return
                 }
 
-                DeviceService.clearDerivedData { amountCleared, error in
+                AppleUtils.clearDerivedData { amountCleared, error in
                     guard error == nil else {
                         NSAlert.showError(message: error?.localizedDescription ?? "Failed to clear derived  data.")
                         return
@@ -185,6 +184,11 @@ class MiniSim: NSObject {
                 }
             }
         }
+    }
+
+    static func showSuccessMessage(title: String, message: String) {
+      UNUserNotificationCenter.showNotification(title: title, body: message)
+      NotificationCenter.default.post(name: .commandDidSucceed, object: nil)
     }
 
     private var mainMenu: [NSMenuItem] {

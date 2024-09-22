@@ -13,6 +13,8 @@ class ExecuteCommand: NSScriptCommand {
         guard
             let platformArg = self.property(forKey: "platform") as? String,
             let platform = Platform(rawValue: platformArg),
+            let deviceTypeArg = self.property(forKey: "deviceType") as? String,
+            let deviceType = DeviceType(rawValue: deviceTypeArg),
             let tag = self.property(forKey: "commandTag") as? String,
             let commandName = self.property(forKey: "commandName") as? String,
             let deviceName = self.property(forKey: "deviceName") as? String,
@@ -22,27 +24,19 @@ class ExecuteCommand: NSScriptCommand {
             return nil
         }
 
-        let device = Device(name: deviceName, identifier: deviceId, platform: platform)
+        let device = Device(name: deviceName, identifier: deviceId, platform: platform, type: deviceType)
         let rawTag = Int(tag) ?? 0
 
         guard let menuItem = SubMenuItems.Tags(rawValue: rawTag) else {
             return nil
         }
+        let actionExecutor = ActionExecutor()
+        actionExecutor.execute(
+          device: device,
+          commandTag: menuItem,
+          itemName: commandName
+        )
 
-        switch platform {
-        case .android:
-            DeviceService.handleAndroidAction(
-                device: device,
-                commandTag: menuItem,
-                itemName: commandName
-            )
-        case .ios:
-            DeviceService.handleiOSAction(
-                device: device,
-                commandTag: menuItem,
-                itemName: commandName
-            )
-        }
         return nil
     }
 }
