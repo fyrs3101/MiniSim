@@ -5,7 +5,6 @@
 //  Created by Oskar Kwaśniewski on 15/03/2023.
 //
 
-import ShellOut
 import SwiftUI
 
 struct SetupView: View {
@@ -27,12 +26,14 @@ struct SetupView: View {
         if !enableiOSSimulators {
             return
         }
-        isXcodeSetupCorrect = DeviceService.checkXcodeSetup()
+      isXcodeSetupCorrect = (try? IOSDeviceDiscovery().checkSetup()) != nil
     }
 
     func checkAndroidStudio() {
         do {
-            UserDefaults.standard.androidHome = try DeviceService.checkAndroidSetup()
+          if (try? AndroidDeviceDiscovery().checkSetup()) != nil {
+            UserDefaults.standard.androidHome = try ADB.getAndroidHome()
+          }
         } catch {
             isAndroidSetupCorrect = false
         }

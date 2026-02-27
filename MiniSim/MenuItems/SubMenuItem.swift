@@ -16,10 +16,22 @@ protocol SubMenuActionItem: SubMenuItem {
     var needBootedDevice: Bool { get }
     var bootsDevice: Bool { get }
     var image: NSImage? { get }
+    var toolTip: String? { get }
+}
+
+extension SubMenuActionItem {
+    var toolTip: String? {
+        nil
+    }
+}
+
+protocol SubMenuSectionItem: SubMenuItem {
+    var title: String { get }
+    var needBootedDevice: Bool { get }
 }
 
 enum SubMenuItems {
-    enum Tags: Int {
+    enum Tags: Int, CaseIterable {
         case copyName = 100
         case copyID
         case coldBoot
@@ -28,10 +40,17 @@ enum SubMenuItems {
         case paste
         case delete
         case logcat
+        case upload
+        case localFiles
         case customCommand = 200
     }
 
     struct Separator: SubMenuItem { }
+
+    struct SectionTitle: SubMenuSectionItem {
+        let title: String
+        let needBootedDevice: Bool
+    }
 
     struct CopyName: SubMenuActionItem {
         let title = NSLocalizedString("Copy name", comment: "")
@@ -110,6 +129,43 @@ enum SubMenuItems {
         )
     }
 
+    struct Upload: SubMenuActionItem {
+        let title = NSLocalizedString("Upload...", comment: "")
+        let tag = Tags.upload.rawValue
+        let bootsDevice = false
+        let needBootedDevice = true
+        let image = NSImage(
+            systemSymbolName: "tray.and.arrow.up",
+            accessibilityDescription: "Upload"
+        )
+        let toolTip: String? = NSLocalizedString(
+            "Upload file/folder to internal storage Downloads folder",
+            comment: ""
+        )
+    }
+
+    struct UploadToFiles: SubMenuActionItem {
+        let title = NSLocalizedString("Upload...", comment: "")
+        let tag = Tags.upload.rawValue
+        let bootsDevice = false
+        let needBootedDevice = true
+        let image = NSImage(
+            systemSymbolName: "tray.and.arrow.up",
+            accessibilityDescription: "Upload"
+        )
+    }
+
+    struct LocalFiles: SubMenuActionItem {
+        let title = NSLocalizedString("Open in Finder", comment: "")
+        let tag = Tags.localFiles.rawValue
+        let bootsDevice = false
+        let needBootedDevice = true
+        let image = NSImage(
+            systemSymbolName: "folder",
+            accessibilityDescription: "Local Files"
+        )
+    }
+
     struct Delete: SubMenuActionItem {
         let title = NSLocalizedString("Delete simulator", comment: "")
         let tag = Tags.delete.rawValue
@@ -145,7 +201,53 @@ enum SubMenuItems {
 }
 
 extension SubMenuItems {
-    static var android: [SubMenuItem] = [
+  static func items(platform: Platform, deviceType: DeviceType) -> [SubMenuItem] {
+    switch (platform, deviceType) {
+    case (.ios, .physical):
+      return [
+        CopyName(),
+        CopyUDID()
+      ]
+    case (.ios, .virtual):
+      return [
+        CopyName(),
+        CopyUDID(),
+
+        Separator(),
+
+        SectionTitle(
+            title: NSLocalizedString("Local Files", comment: ""),
+            needBootedDevice: true
+        ),
+        UploadToFiles(),
+        LocalFiles(),
+
+        Separator(),
+
+        Delete()
+      ]
+    case (.android, .physical):
+      return [
+        CopyName(),
+        CopyID(),
+
+        Separator(),
+
+        ToggleA11y(),
+        Paste(),
+        LaunchLogCat(),
+
+        Separator(),
+
+        SectionTitle(
+            title: NSLocalizedString("Local Files", comment: ""),
+            needBootedDevice: true
+        ),
+        Upload()
+      ]
+
+    case (.android, .virtual):
+      return [
         CopyName(),
         CopyID(),
 
@@ -155,16 +257,20 @@ extension SubMenuItems {
         NoAudio(),
         ToggleA11y(),
         Paste(),
-        DeleteEmulator(),
-        LaunchLogCat()
-    ]
-
-    static var ios: [SubMenuItem] = [
-        CopyName(),
-        CopyUDID(),
+        LaunchLogCat(),
 
         Separator(),
 
-        Delete()
-    ]
+        SectionTitle(
+            title: NSLocalizedString("Local Files", comment: ""),
+            needBootedDevice: true
+        ),
+        Upload(),
+
+        Separator(),
+
+        DeleteEmulator()
+      ]
+    }
+  }
 }
